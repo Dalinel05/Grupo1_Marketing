@@ -1,4 +1,5 @@
-# Grupo 1 - marketing
+# Grupo 1 - Marketing
+
 ## Análisis numérico de la relación entre los factores de desempeño publicitario y los ingresos generados por campañas digitales
 
 ## 1. Descripción general del proyecto

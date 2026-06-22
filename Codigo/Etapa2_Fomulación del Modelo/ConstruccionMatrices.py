@@ -2,7 +2,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-carpeta_script = Path(_file_).resolve().parent
+carpeta_script = Path(__file__).resolve().parent
 proyecto_root = carpeta_script.parent.parent
 carpeta_datos = proyecto_root / "Data"
 

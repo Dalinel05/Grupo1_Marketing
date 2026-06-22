@@ -15,8 +15,7 @@ se aplican al conjunto de entrenamiento y al conjunto de prueba.
 Fórmula:
 z = (x - media) / desviacion_estandar
 """
-
-carpeta_script = Path(_file_).resolve().parent
+carpeta_script = Path(__file__).resolve().parent
 proyecto_root = carpeta_script.parent.parent
 carpeta_datos = proyecto_root / "Data"
 
@@ -27,14 +26,7 @@ ruta_entrenamiento_zscore = carpeta_datos / "data_entrenamiento_zscore.csv"
 ruta_prueba_zscore = carpeta_datos / "data_prueba_zscore.csv"
 ruta_parametros = carpeta_datos / "parametros_zscore.csv"
 
-columnas_proyecto = [
-    "cost",
-    "displays",
-    "clicks",
-    "post_click_conversions",
-    "post_click_sales_amount",
-    "revenue"
-]
+columnas_proyecto = ["cost","displays","clicks","post_click_conversions","post_click_sales_amount","revenue"]
 
 if not ruta_entrenamiento.exists():
     raise FileNotFoundError(f"No se encontró el archivo:\n{ruta_entrenamiento}")

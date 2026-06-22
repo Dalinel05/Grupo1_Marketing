@@ -36,7 +36,7 @@ Estas variables permiten representar el proceso publicitario mediante la relaci�
 ## 4. Etapas de resolución del problema
 ### Etapa 1. Preparación de los datos
 
-Se seleccionarán y limpiarán las variables necesarias para el análisis. Luego, el dataset se dividirá en datos de entrenamiento y prueba, y las variables independientes serán normalizadas mediante el método Min-Max.
+Se seleccionarán y limpiarán las variables necesarias para el análisis. Luego, el dataset se dividirá en datos de entrenamiento y prueba, y las variables independientes serán normalizadas mediante el método de Z-score.
 
 ### Etapa 2. Formulación del modelo
 

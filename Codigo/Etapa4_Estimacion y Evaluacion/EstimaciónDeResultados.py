@@ -1,151 +1,156 @@
-"""
-Etapa 4: Estimación y Evaluación del Desempeño
-
-Este script aplica los coeficientes de regresión (betas) calculados en la 
-Etapa 3 sobre el conjunto de prueba para evaluar la capacidad de generalización 
-de los modelos (completo y reducido). 
-
-Calcula de forma manual las métricas de error RMSE (Raíz del Error Cuadrático 
-Medio) y el coeficiente de determinación R², y genera gráficos comparativos de 
-las predicciones en unidades monetarias.
-
-Parámetros :
-No recibe parámetros directamente como función, pero lee automáticamente los 
-siguientes archivos desde la carpeta 'Data':
-- data_prueba_zscore.csv : Conjunto de datos de prueba normalizado con Z-Score.
-- beta_completo.npy      : Pesos del modelo calculados con todas las variables.
-- beta_reducido.npy      : Pesos del modelo calculados sin la variable redundante.
-
-Retorna:
-No retorna valores físicos en archivos, pero despliega en pantalla:
-1. Una tabla comparativa con los valores de RMSE y R² para ambos modelos.
-2. Una ventana gráfica con la dispersión 'Real vs Predicho' y barras de desempeño.
-"""
-
 from pathlib import Path
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt 
+import matplotlib.pyplot as plt
 
-# 1. FUNCIONES MATEMÁTICAS DE EVALUACIÓN
+# Funciones
+def predecir(matriz_x, coeficientes_beta):
+    return matriz_x @ coeficientes_beta
 
-def predecir(X, beta):
-    """Realiza la estimación del ingreso mediante el producto matricial X@beta."""
-    return X @ beta
+def calcular_rmse(valores_reales, valores_predichos):
+    errores = valores_reales - valores_predichos
+    return np.sqrt(np.mean(errores ** 2))
 
-
-def calcular_rmse(y_real, y_pred):
-    """Calcula de forma manual la Raíz del Error Cuadrático Medio (RMSE)."""
-    error = y_real - y_pred
-    mse = np.mean(error ** 2)
-    return np.sqrt(mse)
-
-
-def calcular_r2(y_real, y_pred):
-    """Calcula de forma manual el coeficiente de determinación R²."""
-    media_y = np.mean(y_real)
-    ss_res = np.sum((y_real - y_pred) ** 2)
-    ss_tot = np.sum((y_real - media_y) ** 2)
-    if ss_tot == 0: 
+def calcular_r2(valores_reales, valores_predichos):
+    media_real = np.mean(valores_reales)
+    suma_residuos = np.sum((valores_reales - valores_predichos) ** 2)
+    suma_total = np.sum((valores_reales - media_real) ** 2)
+    if suma_total == 0:
         return 0.0
-    return 1 - (ss_res / ss_tot)
+    return 1 - (suma_residuos / suma_total)
 
+def desnormalizar_zscore(valores_zscore, media, desviacion):
+    return valores_zscore * desviacion + media
 
-# 2. CONFIGURACIÓN DE RUTAS Y SISTEMA DE ARCHIVOS
+def verificar_columnas(datos, columnas_requeridas):
+    for columna in columnas_requeridas:
+        if columna not in datos.columns:
+            raise ValueError(f"No se encontró la columna: {columna}")
 
-# Localización de directorios del proyecto
+def obtener_parametros_revenue(ruta_parametros):
+    parametros = pd.read_csv(ruta_parametros)
+    verificar_columnas(parametros, ["variable", "media", "desviacion"])
+    fila_revenue = parametros[parametros["variable"] == "revenue"]
+    if fila_revenue.empty:
+        raise ValueError("No se encontraron los parámetros de revenue.")
+    media_revenue = fila_revenue["media"].values[0]
+    desviacion_revenue = fila_revenue["desviacion"].values[0]
+    if desviacion_revenue == 0:
+        raise ValueError("La desviación estándar de revenue es cero.")
+    return media_revenue, desviacion_revenue
+
+def construir_matriz_modelo(datos, variables_modelo):
+    verificar_columnas(datos, variables_modelo)
+    matriz_variables = datos[variables_modelo].to_numpy()
+    columna_unos = np.ones((matriz_variables.shape[0], 1))
+    return np.hstack((columna_unos, matriz_variables))
+
+def graficar_real_vs_predicho(valores_reales, valores_predichos, titulo, r2):
+    plt.figure(figsize=(7, 6))
+    plt.scatter(valores_reales.flatten(), valores_predichos.flatten(),alpha=0.5,label="Predicciones" )
+    minimo = valores_reales.min()
+    maximo = valores_reales.max()
+    plt.plot([minimo, maximo],[minimo, maximo],linestyle="--",linewidth=2,label="Línea ideal")
+    plt.title(f"{titulo}\nR² = {r2:.3f}")
+    plt.xlabel("Revenue real en dólares")
+    plt.ylabel("Revenue predicho en dólares")
+    plt.legend()
+    plt.grid(True, linestyle="--", alpha=0.7)
+    plt.tight_layout()
+    plt.show()
+
+def graficar_barras(modelos, valores, titulo, etiqueta_y, formato_valor):
+    plt.figure(figsize=(7, 5))
+    plt.bar(modelos, valores)
+    plt.title(titulo)
+    plt.ylabel(etiqueta_y)
+    plt.grid(axis="y", linestyle="--", alpha=0.7)
+    for i, valor in enumerate(valores):
+        plt.text(i, valor, formato_valor.format(valor), ha="center", va="bottom")
+    plt.tight_layout()
+    plt.show()
+
+# Rutas
 carpeta_script = Path(__file__).resolve().parent
 proyecto_root = carpeta_script.parent.parent
 carpeta_datos = proyecto_root / "Data"
-
-# Definición de rutas de entrada
-ruta_prueba_csv = carpeta_datos / "data_prueba_zscore.csv"
+ruta_prueba = carpeta_datos / "data_prueba_zscore.csv"
 ruta_beta_completo = carpeta_datos / "beta_completo.npy"
 ruta_beta_reducido = carpeta_datos / "beta_reducido.npy"
+ruta_parametros = carpeta_datos / "parametros_zscore.csv"
 
-# Verificación de la existencia de los archivos requeridos
-for ruta in [ruta_prueba_csv, ruta_beta_completo, ruta_beta_reducido]:
-    if not ruta.exists():
-        raise FileNotFoundError(f"No se encontró el archivo:\n{ruta}")
-
-
-# 3. CARGA DE DATOS Y COEFICIENTES
-
+#Carga de datos
+datos_prueba = pd.read_csv(ruta_prueba)
 beta_completo = np.load(ruta_beta_completo)
 beta_reducido = np.load(ruta_beta_reducido)
-datos_prueba = pd.read_csv(ruta_prueba_csv)
+media_revenue, desviacion_revenue = obtener_parametros_revenue(ruta_parametros)
 
-# Extracción de la variable objetivo en su escala monetaria original
-y_prueba = datos_prueba["revenue"].to_numpy().reshape(-1, 1)
+#Matrices de prueba
+variable_dependiente = "revenue"
+variables_modelo_completo = ["cost","displays","clicks","post_click_conversions","post_click_sales_amount"]
+variables_modelo_reducido = ["cost","displays","clicks","post_click_conversions"]
 
+verificar_columnas(datos_prueba, [variable_dependiente] + variables_modelo_completo)
 
-# 4. CONSTRUCCIÓN DE MATRICES DE PRUEBA (CON COLUMNA DE UNOS)
+revenue_real_zscore = datos_prueba[variable_dependiente].to_numpy().reshape(-1, 1)
 
-# Formulación para el Modelo Completo (5 variables + intercepto)
-vars_modelo_completo = ["cost", "displays", "clicks", "post_click_conversions", "post_click_sales_amount"]
-X_var_completo = datos_prueba[vars_modelo_completo].to_numpy()
-X_completo_prueba = np.hstack((np.ones((X_var_completo.shape[0], 1)), X_var_completo))
+matriz_completa_prueba = construir_matriz_modelo(datos_prueba,variables_modelo_completo)
 
-# Formulación para el Modelo Reducido (4 variables + intercepto)
-vars_modelo_reducido = ["cost", "displays", "clicks", "post_click_conversions"]
-X_var_reducido = datos_prueba[vars_modelo_reducido].to_numpy()
-X_reducido_prueba = np.hstack((np.ones((X_var_reducido.shape[0], 1)), X_var_reducido))
+matriz_reducida_prueba = construir_matriz_modelo(datos_prueba,variables_modelo_reducido)
 
+#Verificación
 
-# 5. EJECUCIÓN DE ESTIMACIONES Y CÁLCULO DE MÉTRICAS
+if matriz_completa_prueba.shape[1] != beta_completo.shape[0]:
+    raise ValueError("Las dimensiones del modelo completo no coinciden.")
 
-# Cálculo de ingresos estimados para ambos modelos
-y_pred_completo = predecir(X_completo_prueba, beta_completo)
-y_pred_reducido = predecir(X_reducido_prueba, beta_reducido)
+if matriz_reducida_prueba.shape[1] != beta_reducido.shape[0]:
+    raise ValueError("Las dimensiones del modelo reducido no coinciden.")
 
-# Evaluación del Modelo Completo
-rmse_completo = calcular_rmse(y_prueba, y_pred_completo)
-r2_completo = calcular_r2(y_prueba, y_pred_completo)
+# Predicciones
 
-# Evaluación del Modelo Reducido
-rmse_reducido = calcular_rmse(y_prueba, y_pred_reducido)
-r2_reducido = calcular_r2(y_prueba, y_pred_reducido)
+revenue_pred_completo_zscore = predecir(matriz_completa_prueba, beta_completo)
+revenue_pred_reducido_zscore = predecir(matriz_reducida_prueba, beta_reducido)
 
+# Métricas en Z-score
 
-# 6. DESPLEGUE DE RESULTADOS EN CONSOLA
+rmse_completo_zscore = calcular_rmse(revenue_real_zscore,revenue_pred_completo_zscore)
+rmse_reducido_zscore = calcular_rmse(revenue_real_zscore,revenue_pred_reducido_zscore)
+r2_completo = calcular_r2(revenue_real_zscore,revenue_pred_completo_zscore)
+r2_reducido = calcular_r2(revenue_real_zscore,revenue_pred_reducido_zscore)
 
-print("=" * 60)
-print(" ETAPA 4: ESTIMACIÓN Y EVALUACIÓN DE RESULTADOS")
-print("=" * 60)
-print(f"RMSE Completo: {rmse_completo:.4f} | R² Completo: {r2_completo:.4f}")
-print(f"RMSE Reducido: {rmse_reducido:.4f} | R² Reducido: {r2_reducido:.4f}")
-print("=" * 60)
+# Revenue en dólares
 
+revenue_real_dolares = desnormalizar_zscore(revenue_real_zscore,media_revenue,desviacion_revenue)
+revenue_pred_completo_dolares = desnormalizar_zscore(revenue_pred_completo_zscore,media_revenue,desviacion_revenue)
+revenue_pred_reducido_dolares = desnormalizar_zscore(revenue_pred_reducido_zscore,media_revenue,desviacion_revenue)
 
-# 7. VISUALIZACIÓN GRÁFICA DE DESEMPEÑO
+# Métricas en dólares
 
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+rmse_completo_dolares = calcular_rmse(revenue_real_dolares,revenue_pred_completo_dolares)
+rmse_reducido_dolares = calcular_rmse(revenue_real_dolares,revenue_pred_reducido_dolares)
 
-# Gráfico 1: Dispersión del Ingreso Real vs Predicho (Modelo Completo)
-ax1.scatter(y_prueba, y_pred_completo, alpha=0.5, color='blue', label='Predicciones')
-ax1.plot([y_prueba.min(), y_prueba.max()], [y_prueba.min(), y_prueba.max()], 'r--', lw=2, label='Línea Ideal (Predicción Perfecta)')
-ax1.set_title(f'Modelo Completo\nReal vs Predicho ($R^2$={r2_completo:.3f})', fontsize=12)
-ax1.set_xlabel('Ingresos Reales (Unidades Monetarias)')
-ax1.set_ylabel('Ingresos Predichos (Unidades Monetarias)')
-ax1.legend()
-ax1.grid(True, linestyle='--', alpha=0.7)
+# Guardar métricas
 
-# Gráfico 2: Comparación métrica de barras entre modelos
-modelos = ['Modelo Completo', 'Modelo Reducido']
-valores_r2 = [r2_completo, r2_reducido]
-valores_rmse = [rmse_completo, rmse_reducido]
+metricas_modelos = pd.DataFrame({"modelo": ["Completo", "Reducido"],"RMSE_Zscore": [rmse_completo_zscore, rmse_reducido_zscore],
+                                 "RMSE_Dolares": [rmse_completo_dolares, rmse_reducido_dolares],"R2": [r2_completo, r2_reducido]})
+metricas_modelos.to_csv(carpeta_datos / "metricas_modelos.csv",index=False)
 
-x = np.arange(len(modelos))
-ancho = 0.35
+# Resultados
+print(" ETAPA 4: ESTIMACIÓN Y EVALUACIÓN")
+print("Resultados en escala Z-score:")
+print(f"Modelo completo -> RMSE: {rmse_completo_zscore:.4f} | R²: {r2_completo:.4f}")
+print(f"Modelo reducido -> RMSE: {rmse_reducido_zscore:.4f} | R²: {r2_reducido:.4f}")
 
-barras_r2 = ax2.bar(x - ancho/2, valores_r2, ancho, label='R² (Más alto es mejor)', color='green')
-barras_rmse = ax2.bar(x + ancho/2, valores_rmse, ancho, label='RMSE (Más bajo es mejor)', color='orange')
+print("\nResultados en dólares:")
+print(f"Modelo completo -> RMSE: ${rmse_completo_dolares:.2f} | R²: {r2_completo:.4f}")
+print(f"Modelo reducido -> RMSE: ${rmse_reducido_dolares:.2f} | R²: {r2_reducido:.4f}")
 
-ax2.set_title('Comparación de Desempeño', fontsize=12)
-ax2.set_xticks(x)
-ax2.set_xticklabels(modelos)
-ax2.legend()
-ax2.grid(axis='y', linestyle='--', alpha=0.7)
+print("\nMétricas guardadas en: metricas_modelos.csv")
 
-plt.tight_layout()
-plt.show()
+# Graficas
+
+modelos = ["Completo", "Reducido"]
+graficar_real_vs_predicho(revenue_real_dolares,revenue_pred_completo_dolares,"Modelo completo: Real vs Predicho", r2_completo)
+graficar_real_vs_predicho(revenue_real_dolares,revenue_pred_reducido_dolares,"Modelo reducido: Real vs Predicho",r2_reducido)
+graficar_barras(modelos, [r2_completo, r2_reducido], "Comparación de R²", "R²", "{:.3f}")
+graficar_barras(modelos,[rmse_completo_dolares, rmse_reducido_dolares],"Comparación de RMSE en dólares","RMSE ($)","${:.2f}")

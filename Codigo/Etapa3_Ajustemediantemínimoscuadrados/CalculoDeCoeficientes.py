@@ -69,4 +69,4 @@ beta_reducido, A_reducido, b_reducido = calcular_beta(X_reducido, y)
 
 np.save(carpeta_datos / "beta_completo.npy", beta_completo)
 np.save(carpeta_datos / "beta_reducido.npy", beta_reducido)
-print("Etapa 3 completada correctamente y coeficientes guardados en archivos .npy")
+print("Etapa 3 completada correctamente y coeficientes guardados en Data.")
